@@ -1,0 +1,613 @@
+---
+title: "PROJECT"
+author: "Cynthia Mutua & Kate Juma"
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+error: true
+date: "`r format(Sys.Date(), '%m/%d/%Y')`"
+---
+# Investigating the Impact of Poverty and Population on Gun Violence Rates.
+
+## Introduction.
+Gun violence remains a major public health issue in the United States. While various factors contribute to it, economic and demographic indicators such as poverty and population density are consistently suspected to be influential. This report aims to explore the relationship between poverty levels, population characteristics, and the prevalence of gun violence across U.S. states over time.
+
+Our data sources include:
+
+1. American Community Survey (ACS)- contains ACS estimates for U.S. states, including population, income, poverty rates, and demographic characteristics -,
+
+2.Gun violence data -Provides gun violence incidents by state and date.
+
+This analysis was conducted using R and Quarto, incorporating visualization, statistical testing, and reproducible data science practices.
+
+## Source
+Data was obtained via the tidycensus R package and the United States Census website.
+
+# Data dictionary
+## American Community Survey (ACS) dataset.
+
+| **Variable**               | **Type**    | **Description**                                                                                       |
+|-----------------------------|-------------|-------------------------------------------------------------------------------------------------------|
+| geoid                      | character   | Geographic region ID with the first 2 digits being the state Federal Information Processing Standard (FIPS) code and the last 3 digits the county FIPS code |
+| county_state               | character   | Geographic region                                                                                    |
+| year                       | double      | Year                                                                                                |
+| population                 | double      | Population                                                                                          |
+| median_income              | double      | Median income in dollars                                                                            |
+| median_monthly_rent_cost   | double      | Median monthly rent costs for renters in dollars                                                    |
+| median_monthly_home_cost   | double      | Median monthly housing costs for homeowners in dollars                                              |
+| prop_female                | double      | Proportion of people who are female                                                                 |
+| prop_male                  | double      | Proportion of people who are male                                                                   |
+| prop_white                 | double      | Proportion of people who are white alone                                                            |
+| prop_black                 | double      | Proportion of people who are Black or African American alone                                        |
+| prop_native                | double      | Proportion of people who are American Indian and Alaska Native alone                                |
+| prop_asian                 | double      | Proportion of people who are Asian alone                                                            |
+| prop_hawaiin_islander      | double      | Proportion of people who are Native Hawaiian and Other Pacific Islander alone                       |
+| prop_other_race            | double      | Proportion of people who are some other race alone                                                  |
+| prop_multi_racial          | double      | Proportion of people who are two or more races                                                      |
+| prop_highschool            | double      | Proportion of people 25 and older whose highest education-level is high school                      |
+| prop_GED                   | double      | Proportion of people 25 and older whose highest education-level is a GED                            |
+| prop_some_college          | double      | Proportion of people 25 and older whose highest education-level is some, but less than 1 year of college |
+| prop_college_no_degree     | double      | Proportion of people 25 and older whose highest education-level is greater than 1 year of college but no degree |
+| prop_associates            | double      | Proportion of people 25 and older whose highest education-level is an Associates degree             |
+| prop_bachelors             | double      | Proportion of people 25 and older whose highest education-level is a Bachelors degree               |
+| prop_masters               | double      | Proportion of people 25 and older whose highest education-level is a Masters degree                 |
+| prop_professional          | double      | Proportion of people 25 and older whose highest education-level is a Professional degree            |
+| prop_doctoral              | double      | Proportion of people 25 and older whose highest education-level is a Doctoral degree                |
+| prop_poverty               | double      | Proportion of people 25 and older living in poverty, defined by the Census Bureau as having an income below the poverty threshold for their family size |
+
+## Gun violence dataset.
+
+**Variable**	          |    **Type**	|     **Description**
+|-----------------------|-------------|------------------------------------------------------------------|
+geoid	                  |   character |     Geographic region ID (FIPS code, matching the ACS geoid)
+incident_id	            |    double	  |     Unique identifier for each gun violence incident
+date	                  |    double	  |     Date of the incident in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)
+state	                  |   character	|     Name of the U.S. state where the incident occurred
+city	                  |   character	|     Name of the city where the incident occurred
+county	                |   character	|     Name of the county where the incident occurred (if available)
+business_or_school      | 	character	|     Indicates whether the incident occurred at a business or  school(if specified)
+address	                |   character	|     Address or block location where the incident took place
+latitude	              |    double 	|     Latitude coordinate of the incident location
+longitude	              |    double 	|     Longitude coordinate of the incident location
+number_victims_killed	  |    double	  |     Number of victims killed in the incident
+number_victims_injured  | 	 double	  |     Number of victims injured in the incident
+number_suspects_killed  |    double	  |     Number of suspects killed in the incident
+number_suspects_injured |	   double	  |     Number of suspects injured in the incident
+number_suspects_arrested| 	 double	  |     Number of suspects arrested following the incident
+incident_characteristics| 	character	|     Text description of the nature of the incident (may include multiple characteristics)
+
+
+#### Loading packages.
+```{r}
+#| warning: FALSE
+#| message: FALSE
+
+
+library(dplyr)
+library(tidyverse)
+library(skimr)
+library(flextable)
+library(mice)
+library(naniar)
+library(gt)
+library(ggplot2)
+library(lubridate)
+library(gtExtras)
+library(gganimate)
+library(gifski)
+library(calendR)
+library(janitor)
+library(moments)
+```
+
+#### Importing data into R.
+
+American Community Survey (ACS) dataset
+```{r}
+# Importing state census data from 2008 - 2023
+us_data <- read_csv("census_data_state_2008-2023.csv")
+```
+
+Gun violence dataset
+```{r}
+# Importing of gun violence data 
+gun_violence <- read_csv("gun_violence_geo.csv")
+```
+
+# Exploring missingness
+
+To check for missingness in the ACS data.
+```{r}
+skim(us_data)
+```
+
+### Lollipop plot to explore ACS data for missingness.
+```{r}
+gg_miss_var(us_data, show_pct = TRUE) +
+labs(caption = "Source: American Community Survey via tidycensus")
+```
+The dataset has no missing values.
+
+# To check for missingness in the second dataset. 
+```{r}
+skim(gun_violence)
+```
+
+### Plotting a lollipop plot to explore missingness
+```{r}
+gg_miss_var(gun_violence, show_pct = TRUE) +
+  labs(caption = "Source: Gun Violence Archive")
+```
+While the majority of the dataset was complete, we did observe missing values in certain descriptive fields of the gun violence data, notably business_or_school, county, and address. This missingness does not affect the calculation of core metrics like gun violence rates or their relationship with poverty which are the main focus of our analysis.
+
+# Exploratory Data Analysis
+
+Lets explore the summary statistics
+```{r}
+# summarizing mean of the median_income from the year 2014-2023 by county_state.
+us_data |>
+  filter(year >= 2014, year <= 2023) |>
+  group_by(year, county_state) |>
+  summarize(average_median_income =  round(mean(median_income, na.rm = TRUE))) |>
+  arrange(desc(average_median_income)) |>
+  ungroup() |>
+  slice_head(n = 10) |>
+  flextable() |>
+  colformat_double(big.mark = "", digits = 0) |>
+  theme_zebra() |>
+  add_header_lines("Table 1: Top 10 states by Average median income, 2014–2023")
+```
+
+Next we can check the sample size of the population its mean and standard deviation per year.
+```{r}
+# Summarizing sample size of the population its mean and standard deviation per year.
+summary_stat <- us_data |>
+  group_by(year) |> # Groups the data by year.
+  summarize(pop_mean =  mean(population, na.rm = TRUE), # Calculates the mean population for each year.
+            pop_size = n(), # Counts the number of entries in states per year.
+            pop_sd = round(sd(population, na.rm = TRUE))) |> # Calculates and rounds the standard deviation of pouplation per year.
+  ungroup() |>
+  slice_head(n = 10)
+  
+# Create a flextable for the summary statistics
+flextable(summary_stat) |>
+   colformat_double(big.mark = "", digits = 0) |>
+  add_header_lines("Table 2: Summary statistics over the years") |>
+  theme_vanilla()
+  
+```
+This table summarizes the average state-level population statistics from 2008 to 2017.These values reflect state-level averages whereby the mean population represents the average population across 52 U.S. states and territories each year, while the standard deviation shows the variation in population sizes across them.
+
+# Visualize the relationship of median income vs poverty rate using ggplot.
+
+```{r}
+# Filter the dataset for the year 2019 and create a scatterplot of median income vs poverty rate
+us_data|>
+  filter(year == 2019) |>
+  ggplot(aes(x = median_income, y = prop_poverty)) +
+  geom_point(size = 3, alpha = 0.7) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "Fig 1: Median Income vs. Poverty Rate (2019)",
+       x = "Median Income",
+       y = "Proportion in Poverty",
+       caption = "Data source: American Community Survey (ACS)") +
+  theme_bw()
+
+```
+This scatter plot shows a negative relationship between median income and poverty rate across U.S. states in 2019. 
+States with higher incomes tend to have lower poverty rates, as highlighted by the downward  trend line.
+
+Visualizing trend of the median_income vs prop_poverty for the state of Michigan over time.
+```{r}
+us_data |>
+  filter(county_state == "Michigan") |>
+  ggplot(aes(x = year)) +
+  geom_line(aes(y = median_income, color = "Income")) +
+  geom_line(aes(y = prop_poverty * 100000, color = "Poverty (×100k)")) +
+  scale_y_continuous(
+    name = "Median Income",
+    sec.axis = sec_axis(~ . / 100000, name = "Poverty Rate")
+  ) +
+  scale_color_colorblind() +
+  labs(title = "Michigan: Median Income vs. Poverty Rate Over Time",
+       x = "Year",
+  caption = "Fig 2: Median Income vs Poverty Rate,
+  Data source: American Community Survey (ACS)")+
+  theme_dark() +
+  theme(legend.title = element_blank(),
+        legend.position = "bottom")
+```
+The line graph illustrates Michigan’s socioeconomic evolution from 2008 to 2023, with rising median income signaling economic progress and fluctuating poverty rates highlighting persistent challenges. The inverse relationship between these metrics suggests that economic growth alone doesn’t eliminate poverty, which may contribute to social issues like gun violence.
+
+# Exploratory data analysis and data cleaning for the second dataset.
+The code snippet transforms the gun_violence dataset by converting the `date` column to a `Date` object and creating new columns (day, year, month) using lubridate functions. This enables temporal aggregation and analysis, supporting visualizations (e.g., calendar heatmap, yearly heatmap) and data merging with ACS data. It’s a critical preprocessing step that ensures the dataset is ready for the project’s statistical and visual analyses, directly contributing to insights about gun violence patterns and their socioeconomic drivers.
+
+
+```{r}
+# Aggregating data.
+gun_violence <- gun_violence |>
+  mutate(date = ymd(date), # Changing the data variable to a date type variable.
+         day = day(date),
+         year = year(date), 
+         month = month(date, label = TRUE, abbr = FALSE))  # extracting the day, year and month.
+
+```
+
+Creation of a table summarizing the total number of victims killed in gun violence incidents across cities in California during May 2019.
+```{r}
+# Checking number of killed victims in the year 2019.
+ gun_violence |>
+  filter(state == "California", year == 2019, month == "May") |>
+  group_by(city)|>
+  summarize(total_victims_killed = sum(number_victims_killed))|>
+  arrange(desc(total_victims_killed)) |>
+  head(15) |>
+  gt() |>
+  gt_theme_nytimes() |>
+  tab_caption("Table 3: Top 15 cities by total number of victims killed in month of May 2019")
+
+  
+```
+
+#### Visualizing the number of gun violence victims killed per day in California for 2019 with CalendR.
+
+```{r}
+# Calculating number of gun violence incidents for each date.
+gun_violence_counts <- gun_violence |> 
+  filter(state == "California", year == 2019) |>
+  mutate(date = make_date(year, month, day)) |>
+  group_by(date) |> # Groups incidents by date
+  summarize(total_victims_killed = sum(number_victims_killed, na.rm = TRUE))
+
+# Creating a date sequence.
+all_dates <- tibble(date = seq(as.Date("2019-01-01"), as.Date("2019-12-31"), by = "day")) # Generates a sequence of all dates in 2019 (365 days).
+
+# Joining data to fill missing days with 0
+gun_violence_counts <- all_dates |>
+  left_join(gun_violence_counts, by = "date") |>
+  mutate(total_victims_killed = replace_na(total_victims_killed, 0)) # Ensures every day has a value (0 for no victims).
+  
+
+
+# Creating heatmap calendar of number of victims
+gun_violence_calendar <- calendR(year = 2019,
+                            title = "Daily distribution of gun victims in California, 2019",
+        special.days = gun_violence_counts$total_victims_killed, # Maps the number of victims to each day’s color intensity.
+        gradient = TRUE,
+        monthnames = month.name, # Displays full month names
+        months.size = 11,
+        weeknames.size = 3.3,
+        legend.pos = "bottom",
+        legend.title = "Number of victims killed",
+        ncol = 3,
+        margin = 1) +
+    scale_fill_gradient(low = "white", high = "deeppink4",
+  guide = guide_colorbar(frame.colour = "black", 
+                         ticks.colour = "black",
+                         title.position = "top")) + labs(caption = "Figure 3: Daily gun violence deaths in California, 2019. Source: Gun Violence Archive")
+
+# Saving plot
+size_mult <- 22
+ggsave(plot = gun_violence_calendar,
+       filename = "calendar_plot.png",
+       units = "mm",
+       dpi = 120,
+       width = 7*size_mult,
+       height = 8.5*size_mult)
+
+knitr::include_graphics("calendar_plot.png")
+
+```
+The calendar heatmap reveals that gun violence deaths in California peak on summer weekends and holidays.
+
+Aggregating gun violence incidents by year and state, creating a new dataset called yearly_violence.
+```{r}
+
+# Aggregating by year and state.
+yearly_violence <- gun_violence |>
+  filter(!is.na(state), !is.na(year)) |> # Checks for missing or inconsistent state or year values
+  rename(county_state = state) |> #renaming the state to county_state because the column represents the state.
+  group_by(year, county_state) |>
+  summarise(total_cases = n(), total_victims_killed = sum(number_victims_killed, na.rm = TRUE)) #Computes the number of incidents in each group
+
+```
+
+Lets Visualize the distribution of gun violence cases across states and years. 
+```{r}
+yearly_violence |>
+  ggplot(aes(x = factor(year), y = county_state, fill = total_cases)) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c(option = "C") +
+  labs(
+    title = "Heatmap of Gun Violence Incidents by Year and State",
+    x = "Year",
+    y = "State",
+    fill = "Total Cases", 
+    caption = "Figure 4: Gun Violence Incidents by year and state,
+    Source: Gun Violence Archive") +
+  theme_minimal() +
+theme(axis.text.y = element_text(hjust = 1)) +
+  theme(legend.position = "bottom",legend.key.width = unit(1, "cm"))
+
+```
+## String Manipulation.
+
+```{r}
+# Creating contains_robbery variables
+gun_robbery <- gun_violence |>
+  filter(!is.na(incident_characteristics)) |>
+  mutate(contains_robbery = str_detect(incident_characteristics, pattern = "Armed robbery with injury"))
+
+```
+
+```{r}
+gun_robbery |>
+summarize(armed_robbery_count = sum(contains_robbery))
+
+gun_robbery |>
+count(contains_robbery)
+
+
+# using janitor package to get percentages.
+gun_robbery |>
+  tabyl(contains_robbery)
+```
+
+Investigating incident characteristic over the years for California.
+```{r fig.align='center', fig.width=8, fig.height=6, out.width='80%'}
+# Clean 'incident_characteristics' and splitting into separate rows.
+gun_robbery <- gun_robbery |>
+   filter(!is.na(incident_characteristics)) |>
+  mutate(incident_characteristics = str_replace_all(incident_characteristics, "\\r\\n|\\n", ",")) |>
+  separate_rows(incident_characteristics, sep = ",") |>
+  mutate(incident_characteristics = str_trim(incident_characteristics))
+
+#Creating animated bar-chart of top 10 incident types by year in California.
+gun_robbery |>
+  filter(state == "California") |>
+  count(year, incident_characteristics, sort = TRUE) |>
+  group_by(year) |>
+  slice_max(n, n = 10) |>
+  ungroup() |>
+  ggplot(aes(x = reorder(incident_characteristics, n), y = n, fill = incident_characteristics)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  labs(title = "Top 10 Incident Types in Carlifornia, Year: {closest_state}",
+       x = NULL,
+       y = "Count",
+       caption = "Fig 5: Top 10 incident types in California,
+       Data source: American Community Survey (ACS)") +
+  theme_bw() +
+  transition_states(year, transition_length = 6, state_length = 4) +
+  ease_aes('sine-in-out')
+```
+
+# Merging the two datasets.
+Merging the two dataset by `year` and `county_state` with the function `inner_join` to create a new variable called'pop_gunviolence`.
+```{r}
+economic_indic <- us_data |>
+  filter(year >= 2014, year <= 2023) |>
+  select(county_state, year, population, median_income, prop_poverty)
+```
+
+```{r}
+pop_gunviolence <- yearly_violence |>
+  inner_join(economic_indic, by = c("year", "county_state"))
+```
+
+
+```{r}
+skim(pop_gunviolence)
+```
+Creating a new variable called `gun_violence_rate`which standardizes the number of gun violence cases `total_cases` by population size. The multiplication by 100,000 turns it into a rate that's easier to interpret and compare across different regions or years.
+```{r}
+
+# Calculate the rate of gun violence per 100,000 population
+pop_gunviolence <- pop_gunviolence |>
+ mutate(gun_violence_rate = total_cases / population * 100000)
+
+```
+
+### Permutation test for Quantitative variables.
+Permutation test to evaluate the relationship between `prop_poverty` and `gun_violence_rate`
+```{r}
+# First chunk - Permutation test function and execution
+set.seed(1994) # Setting seed for reproducibility
+# Permutation test for prop_poverty
+# Defining permutation test function.
+perm_test <- function(data, n_permutations = 1000) {
+  observed_correlation <- cor(data$prop_poverty, data$gun_violence_rate)
+  permuted_correlations <- numeric(n_permutations)
+ 
+  # Running the permutations
+  for (i in 1:n_permutations) {
+    permuted_data <- data |>
+      mutate(prop_poverty = sample(prop_poverty))
+    permuted_correlations[i] <- cor(permuted_data$prop_poverty, permuted_data$gun_violence_rate)
+  }
+ 
+  p_value <- mean(abs(permuted_correlations) >= abs(observed_correlation))
+  return(list(
+    observed_correlation = observed_correlation,
+    permuted_correlations = permuted_correlations,  # Store the permuted values 
+    p_value = p_value
+  ))
+}
+# Perform the permutation test
+result <- perm_test(pop_gunviolence)
+
+```
+
+```{r}
+data.frame(correlation = result$permuted_correlations) %>%
+  ggplot(aes(x = correlation)) +
+  geom_histogram() +
+  geom_vline(xintercept = result$observed_correlation, color = "red", linetype = "dashed", linewidth = 1.2) +
+  labs(title = "Null Distribution of Permutation Correlations",
+       x = "Correlation between Poverty Rate and Gun Violence Rate",
+       y = "Frequency",
+       caption = "Fig 5: Null distribution of Permutation Correlations,
+       Data Source: American Community Survey (ACS)",
+       subtitle = paste0("Observed correlation = ", round(result$observed_correlation, 3),
+                         " | p = ", round(result$p_value, 3))) +
+  theme_minimal()
+```
+This provides strong evidence that poverty rates and gun violence rates are meaningfully related in our dataset, suggesting that socioeconomic factors may play an important role in explaining variations in gun violence across different areas.
+
+Randomization of pop_gunviolence data.
+```{r}
+randomization_test <- function(data, n_randomizations = 1000) {
+  observed_correlation <- cor(data$population, data$gun_violence_rate)
+  randomized_correlations <- numeric(n_randomizations)
+  
+  for (i in 1:n_randomizations) {
+    randomized_data <- data %>%
+      mutate(population = sample(population))
+    randomized_correlations[i] <- cor(randomized_data$population, randomized_data$gun_violence_rate)
+  }
+  
+  p_value <- mean(abs(randomized_correlations) >= abs(observed_correlation))
+  
+  return(list(
+    observed_correlation = observed_correlation, 
+    permuted_distribution = randomized_correlations,
+    p_value = p_value
+  ))
+}
+
+# Run the randomization test
+result <- randomization_test(pop_gunviolence)
+```
+
+visualizing null distribution of correlations.
+
+```{r}
+# Visualization in a separate chunk
+ggplot(data.frame(correlation = result$permuted_distribution), aes(x = correlation)) +
+  geom_histogram() +
+  geom_vline(xintercept = result$observed_correlation, color = "red", linetype = "dashed", linewidth = 1.2) +
+  labs(title = "Null Distribution of Permutation Correlations",
+       x = "Correlation between Population and Gun Violence Rate",
+       y = "Frequency",
+       caption = "Fig 6: Null distribution of Permutation Correlations,
+       Data Source: American Community Survey (ACS),
+       Gun Violence Archive",
+       subtitle = paste0("Observed correlation = ", round(result$observed_correlation, 3),
+                         " | p = ", round(result$p_value, 3))) +
+  theme_minimal()
+```
+The permutation test results show a weak negative correlation (-0.052) between population and gun violence rate, with a p-value of 0.259. The visualization displays the null distribution of correlations that would occur by random chance, with our observed correlation (red dashed line) falling within this distribution. Since the p-value exceeds the conventional threshold of 0.05. This indicates that population alone may not be a reliable predictor of gun violence rates.
+
+### Permutation test for Categorical variables.
+Creating a new variable `poverty_group by splitting area by median poverty rate.
+```{r}
+pop_gunviolence <- pop_gunviolence |>
+  mutate(poverty_group = ifelse(prop_poverty > median(prop_poverty, na.rm = TRUE),
+                                "High Poverty", "Low Poverty"))
+```
+
+Creating a density plot to check for skewness and normality.
+```{r}
+ggplot(pop_gunviolence, aes(x = gun_violence_rate, fill = poverty_group)) +
+  geom_density(alpha = 0.5) +
+   scale_fill_manual(values = c("High Poverty" = "#e63946", "Low Poverty" = "#457b9d")) +
+  facet_grid(poverty_group ~ .)
+  labs(
+    title = "Density Plot of Gun Violence Rates by Poverty Group",
+    x = "Gun Violence Rate (per 100,000 population)",
+    y = "Density",
+    fill = "Poverty Group",
+    caption = "Fig 7: Null distribution of Permutation Correlations,
+       Data Source: Gun Violence Archive",
+  ) +
+  theme_minimal() +
+  scale_fill_manual(values = c("High Poverty" = "#e63946", "Low Poverty" = "#457b9d"))
+```
+
+
+# Two-sample t-test
+Next, we state the hypotheses and implement Welch’s two-sample t-test to test whether the average gun violence rate is different between high poverty and low poverty areas.
+$$ H_0: \mu_{\text{High}} = \mu_{\text{Low}}  $$
+$$ H_a: \mu_{\text{High}} = \mu_{\text{Low}}  $$
+where $\mu_{\text{High}}$ is the average gun violence rate in high poverty areas., and $\mu_{\text{Low}}$ is the average gun violence rate in low poverty areas.
+
+```{r}
+# Reorder factor levels for t-test
+pop_gunviolence <- pop_gunviolence |>
+  dplyr::mutate(poverty_group = fct_relevel(poverty_group, "High Poverty", "Low Poverty"))
+
+
+t_test_result <- t.test(gun_violence_rate ~ poverty_group, data = pop_gunviolence)
+
+# Display results of t-test
+t_test_result |> 
+  broom::tidy() |> 
+  flextable() |> 
+  colformat_double(digits = 3) |> 
+set_formatter(p.value = function(x) {format.pval(x, digits = 3)}) |> 
+  set_caption("Table 4: Results of two-sample t-test comparing gun violence rates between high and low poverty areas.") |> 
+  autofit() |> 
+  fit_to_width(max_width = 7)
+```
+We observed high positive skewness in the gun violence rate variable, particularly in the High Poverty group. Given the violation of the normality assumption required for the t-test, we proceeded with a non-parametric permutation test to assess the difference in means, which does not rely on distributional assumptions.
+
+```{r}
+# Calculating standard deviations and variances for each group
+pop_gunviolence |>
+  group_by(poverty_group) |>
+  summarise(
+    n = n(),
+    Mean = mean(gun_violence_rate, na.rm = TRUE),
+    SD = sd(gun_violence_rate, na.rm = TRUE),
+    Var = var(gun_violence_rate, na.rm = TRUE)) |>
+    
+flextable() |> 
+  colformat_double(digits = 3) |> 
+  set_caption("Table 5: Summary statistics of gun violence rate by poverty group") |>
+  autofit()
+  
+```
+The standard deviation of gun violence rates in the High Poverty group was 210.82, compared to 38.55 in the Low Poverty group. This indicates higher variability in one group. The difference in variance supports the use of Welch’s t-test, which does not assume equal variances between groups.
+
+
+```{r}
+# Number of permutations to do
+n_permutations <- 10000
+
+# Instantiating vector for test statistics
+permutation_statistics <- vector(length = n_permutations)
+
+# Calculating t-test statistic for each permutation
+for (p in 1:n_permutations) {
+  permuted_data <- pop_gunviolence |> 
+    mutate(poverty_group = sample(poverty_group, replace = FALSE))  # Shuffle group labels
+  
+  permutation_statistics[p] <- t.test(gun_violence_rate ~ poverty_group, 
+                                      data = permuted_data,
+                                      alternative = "greater") |> 
+    broom::tidy() |> 
+    pull(statistic)
+}
+
+```
+
+Create a histogram displaying the null distribution obtained for the randomization test, similar to the visualization below. What is the distribution centered at?
+```{r}
+# Organizing into a tibble
+computed_statistics <- tibble(Value = permutation_statistics)
+
+# Creating a histogram.
+computed_statistics |>
+  ggplot(aes(x = Value)) +
+  geom_histogram(aes(y= after_stat(density)), color = "white") +
+  geom_density(color = "turquoise", linewidth = 1) +
+  stat_function(fun = function(x) dt(x, df = t_test_result$parameter),color = "violet",linewidth = 1) +
+  labs(title = "Randomization null distribution",
+       caption = "Fig 7: Null distribution of Permutation Correlations") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  geom_vline(xintercept = quantile(permutation_statistics, probs = 0.95), color = "red", linetype = "solid") +
+  geom_vline(xintercept = t_test_result$statistic, color= "blue",linetype = "dotted")
+```
+
+The distribution is approximately centered at zero, consistent with the null hypothesis of no group difference. The blue dotted line shows the observed *t*-statistic, while the red solid line marks the 95th percentile of the null distribution. If the observed statistic lies beyond this threshold, it provides evidence against the null hypothesis.
