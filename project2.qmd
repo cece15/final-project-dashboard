@@ -3,8 +3,12 @@ title: "PROJECT"
 author: "Cynthia Mutua & Kate Juma"
 format:
   html:
+    dashboard: 
+      orientation: rows
+    theme: cosmo
     self-contained: true
     embed-resources: true
+editor: visual
 error: true
 date: "`r format(Sys.Date(), '%m/%d/%Y')`"
 ---
@@ -99,6 +103,8 @@ library(gifski)
 library(calendR)
 library(janitor)
 library(moments)
+library(plotly)
+library(leaflet)
 ```
 
 #### Importing data into R.
@@ -181,6 +187,7 @@ This table summarizes the average state-level population statistics from 2008 to
 
 # Visualize the relationship of median income vs poverty rate using ggplot.
 
+::: {.column width="50%"}
 ```{r}
 # Filter the dataset for the year 2019 and create a scatterplot of median income vs poverty rate
 us_data|>
@@ -195,10 +202,12 @@ us_data|>
   theme_bw()
 
 ```
+:::
 This scatter plot shows a negative relationship between median income and poverty rate across U.S. states in 2019. 
 States with higher incomes tend to have lower poverty rates, as highlighted by the downward  trend line.
 
 Visualizing trend of the median_income vs prop_poverty for the state of Michigan over time.
+::: {.column width="50%"}
 ```{r}
 us_data |>
   filter(county_state == "Michigan") |>
@@ -218,6 +227,7 @@ us_data |>
   theme(legend.title = element_blank(),
         legend.position = "bottom")
 ```
+:::
 The line graph illustrates Michigan’s socioeconomic evolution from 2008 to 2023, with rising median income signaling economic progress and fluctuating poverty rates highlighting persistent challenges. The inverse relationship between these metrics suggests that economic growth alone doesn’t eliminate poverty, which may contribute to social issues like gun violence.
 
 # Exploratory data analysis and data cleaning for the second dataset.
@@ -252,6 +262,7 @@ Creation of a table summarizing the total number of victims killed in gun violen
 
 #### Visualizing the number of gun violence victims killed per day in California for 2019 with CalendR.
 
+::: {.column width="50%"}
 ```{r}
 # Calculating number of gun violence incidents for each date.
 gun_violence_counts <- gun_violence |> 
@@ -299,6 +310,7 @@ ggsave(plot = gun_violence_calendar,
 knitr::include_graphics("calendar_plot.png")
 
 ```
+:::
 The calendar heatmap reveals that gun violence deaths in California peak on summer weekends and holidays.
 
 Aggregating gun violence incidents by year and state, creating a new dataset called yearly_violence.
@@ -313,9 +325,11 @@ yearly_violence <- gun_violence |>
 
 ```
 
-Lets Visualize the distribution of gun violence cases across states and years. 
+Lets Visualize the distribution of gun violence cases across states and years using plotly.
+::: {.column width="50%"}
 ```{r}
-yearly_violence |>
+# Original plot assigned to a variable
+p <- yearly_violence |>
   ggplot(aes(x = factor(year), y = county_state, fill = total_cases)) +
   geom_tile(color = "white") +
   scale_fill_viridis_c(option = "C") +
@@ -325,12 +339,17 @@ yearly_violence |>
     y = "State",
     fill = "Total Cases", 
     caption = "Figure 4: Gun Violence Incidents by year and state,
-    Source: Gun Violence Archive") +
+    Source: Gun Violence Archive"
+  ) +
   theme_minimal() +
-theme(axis.text.y = element_text(hjust = 1)) +
-  theme(legend.position = "bottom",legend.key.width = unit(1, "cm"))
+  theme(axis.text.y = element_text(hjust = 1)) +
+  theme(legend.position = "bottom", legend.key.width = unit(1, "cm"))
 
+# Make it interactive
+ggplotly(p)
 ```
+:::
+
 ## String Manipulation.
 
 ```{r}
@@ -439,6 +458,7 @@ result <- perm_test(pop_gunviolence)
 
 ```
 
+::: {.column width="50%"}
 ```{r}
 data.frame(correlation = result$permuted_correlations) %>%
   ggplot(aes(x = correlation)) +
@@ -453,6 +473,7 @@ data.frame(correlation = result$permuted_correlations) %>%
                          " | p = ", round(result$p_value, 3))) +
   theme_minimal()
 ```
+:::
 This provides strong evidence that poverty rates and gun violence rates are meaningfully related in our dataset, suggesting that socioeconomic factors may play an important role in explaining variations in gun violence across different areas.
 
 Randomization of pop_gunviolence data.
@@ -482,6 +503,7 @@ result <- randomization_test(pop_gunviolence)
 
 visualizing null distribution of correlations.
 
+::: {.column width="50%"}
 ```{r}
 # Visualization in a separate chunk
 ggplot(data.frame(correlation = result$permuted_distribution), aes(x = correlation)) +
@@ -497,6 +519,7 @@ ggplot(data.frame(correlation = result$permuted_distribution), aes(x = correlati
                          " | p = ", round(result$p_value, 3))) +
   theme_minimal()
 ```
+:::
 The permutation test results show a weak negative correlation (-0.052) between population and gun violence rate, with a p-value of 0.259. The visualization displays the null distribution of correlations that would occur by random chance, with our observed correlation (red dashed line) falling within this distribution. Since the p-value exceeds the conventional threshold of 0.05. This indicates that population alone may not be a reliable predictor of gun violence rates.
 
 ### Permutation test for Categorical variables.
@@ -508,6 +531,8 @@ pop_gunviolence <- pop_gunviolence |>
 ```
 
 Creating a density plot to check for skewness and normality.
+
+::: {.column width="50%"}
 ```{r}
 ggplot(pop_gunviolence, aes(x = gun_violence_rate, fill = poverty_group)) +
   geom_density(alpha = 0.5) +
@@ -524,6 +549,7 @@ ggplot(pop_gunviolence, aes(x = gun_violence_rate, fill = poverty_group)) +
   theme_minimal() +
   scale_fill_manual(values = c("High Poverty" = "#e63946", "Low Poverty" = "#457b9d"))
 ```
+:::
 
 
 # Two-sample t-test
@@ -593,6 +619,7 @@ for (p in 1:n_permutations) {
 ```
 
 Create a histogram displaying the null distribution obtained for the randomization test, similar to the visualization below. What is the distribution centered at?
+::: {.column width="50%"}
 ```{r}
 # Organizing into a tibble
 computed_statistics <- tibble(Value = permutation_statistics)
@@ -609,5 +636,7 @@ computed_statistics |>
   geom_vline(xintercept = quantile(permutation_statistics, probs = 0.95), color = "red", linetype = "solid") +
   geom_vline(xintercept = t_test_result$statistic, color= "blue",linetype = "dotted")
 ```
-
+:::
 The distribution is approximately centered at zero, consistent with the null hypothesis of no group difference. The blue dotted line shows the observed *t*-statistic, while the red solid line marks the 95th percentile of the null distribution. If the observed statistic lies beyond this threshold, it provides evidence against the null hypothesis.
+
+[View Project on GitHub](https://github.com/cece15/final-project-dashboard)
